@@ -78,7 +78,7 @@ void drm_prime_remove_buf_handle(struct drm_prime_file_private *prime_fpriv,
 				 uint32_t handle);
 
 /* drm_drv.c */
-struct drm_minor *drm_minor_acquire(unsigned int minor_id);
+struct drm_minor *drm_minor_acquire(unsigned int minor_id, bool is_accel_minor);
 void drm_minor_release(struct drm_minor *minor);
 
 /* drm_managed.c */
