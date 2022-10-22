@@ -67,6 +67,10 @@ static bool drm_core_init_complete;
 
 static struct dentry *drm_debugfs_root;
 
+#ifdef CONFIG_ACCEL
+static struct dentry *accel_debugfs_root;
+#endif
+
 DEFINE_STATIC_SRCU(drm_unplug_srcu);
 
 /*
@@ -1031,14 +1035,51 @@ static const struct file_operations drm_stub_fops = {
 	.llseek = noop_llseek,
 };
 
+static void accel_core_exit(void)
+{
+#ifdef CONFIG_ACCEL
+	unregister_chrdev(ACCEL_MAJOR, "accel");
+	debugfs_remove(accel_debugfs_root);
+	accel_sysfs_destroy();
+#endif
+}
+
 static void drm_core_exit(void)
 {
 	drm_privacy_screen_lookup_exit();
+	accel_core_exit();
 	unregister_chrdev(DRM_MAJOR, "drm");
 	debugfs_remove(drm_debugfs_root);
 	drm_sysfs_destroy();
 	idr_destroy(&drm_minors_idr);
 	drm_connector_ida_destroy();
+}
+
+static int __init accel_core_init(void)
+{
+#ifdef CONFIG_ACCEL
+	int ret;
+
+	ret = accel_sysfs_init();
+	if (ret < 0) {
+		DRM_ERROR("Cannot create ACCEL class: %d\n", ret);
+		goto error;
+	}
+
+	accel_debugfs_root = debugfs_create_dir("accel", NULL);
+
+	ret = register_chrdev(ACCEL_MAJOR, "accel", &drm_stub_fops);
+	if (ret < 0)
+		goto error;
+
+error:
+	/* Any cleanup will be done in drm_core_exit() that will call
+	 * to accel_core_exit()
+	 */
+	return ret;
+#else
+	return 0;
+#endif
 }
 
 static int __init drm_core_init(void)
@@ -1058,6 +1099,10 @@ static int __init drm_core_init(void)
 	drm_debugfs_root = debugfs_create_dir("dri", NULL);
 
 	ret = register_chrdev(DRM_MAJOR, "drm", &drm_stub_fops);
+	if (ret < 0)
+		goto error;
+
+	ret = accel_core_init();
 	if (ret < 0)
 		goto error;
 
